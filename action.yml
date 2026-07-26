@@ -1,5 +1,7 @@
+# Copyright (c) 2025-2026 fei_cong(https://github.com/feicong/feicong-course)
+
 name: 'GKI Kernel Module Build Action'
-description: 'An action to build Android GKI kernel modules.'
+description: 'Build an Android GKI kernel module with Droid DDK.'
 
 branding:
   icon: 'activity'
@@ -7,184 +9,136 @@ branding:
 
 inputs:
   tag:
-    description: 'Specify the Android kernel version and tag to build for (e.g., android13-5.15).'
+    description: 'Specify the Android kernel target to build for (e.g., android17-6.18).'
     default: 'android13-5.15'
     required: true
   arch:
-    description: 'Specify the architecture to build for (e.g., aarch64 or x86_64).'
+    description: 'Specify the kernel module architecture (aarch64 or arm64).'
     required: true
     default: 'aarch64'
   module-path:
-    description: 'Specify the name of the kernel module artifact.'
+    description: 'Specify the name of the kernel module source artifact.'
     required: true
   module-name:
-    description: 'Specify the name of the kernel module.'
+    description: 'Specify the kernel module directory and output name.'
     required: true
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
-    - name: Download LKM Source Code
-      uses: actions/download-artifact@v4
+    - name: Download LKM source code
+      uses: actions/download-artifact@v8
       with:
         name: ${{ inputs.module-path }}
         path: ${{ inputs.module-name }}
 
-    - name: Validate Input
+    - name: Validate inputs
       shell: bash
+      env:
+        DDDK_TAG: ${{ inputs.tag }}
+        DDDK_ARCH: ${{ inputs.arch }}
+        MODULE_DIR: ${{ inputs.module-name }}
       run: |
-        VALID_TAGS=("android12-5.10" "android13-5.10" "android13-5.15" "android14-5.15" "android14-6.1" "android15-6.6" "android16-6.12")
-        if [[ ! " ${VALID_TAGS[@]} " =~ " ${{ inputs.tag }} " ]]; then
-          echo "Invalid tag specified: ${{ inputs.tag }}. Must be one of: ${VALID_TAGS[@]}"
+        set -euo pipefail
+        valid_tags=(
+          android13-5.15
+          android14-5.15
+          android14-6.1
+          android15-6.1
+          android15-6.6
+          android16-6.6
+          android16-6.12
+          android17-6.18
+        )
+        if [[ ! " ${valid_tags[*]} " =~ " ${DDDK_TAG} " ]]; then
+          printf 'Invalid tag: %s. Supported tags: %s\n' \
+            "$DDDK_TAG" "${valid_tags[*]}" >&2
           exit 1
         fi
-        if [ ! -d "${{ inputs.module-name }}" ]; then
-          echo "Invalid module-name: Directory ${{ inputs.module-name }} does not exist."
+        case "$DDDK_ARCH" in
+          aarch64|arm64) ;;
+          *)
+            printf 'Invalid arch: %s. Droid DDK v2 builds ARM64 modules.\n' \
+              "$DDDK_ARCH" >&2
+            exit 1
+            ;;
+        esac
+        if [[ ! -d "$MODULE_DIR" ]]; then
+          printf 'Module directory does not exist: %s\n' "$MODULE_DIR" >&2
           exit 2
         fi
-        tree -f .
-        if [ ! -f "${{ inputs.module-name }}/Makefile" ]; then
-          echo "${{ inputs.module-name }}/Makefile does not exist."
+        if [[ ! -f "$MODULE_DIR/Makefile" ]]; then
+          printf 'Module Makefile does not exist: %s/Makefile\n' "$MODULE_DIR" >&2
           exit 3
         fi
-        if [ ! -f "${{ inputs.module-name }}/${{ inputs.module-name }}.c" ]; then
-          echo "Error: ${inputs.module-name}/${inputs.module-name}.c does not exist."
+        if [[ ! -f "$MODULE_DIR/$MODULE_DIR.c" ]]; then
+          printf 'Module source does not exist: %s/%s.c\n' \
+            "$MODULE_DIR" "$MODULE_DIR" >&2
           exit 4
         fi
 
-    - name: Install Build Tools
-      uses: awalsh128/cache-apt-pkgs-action@latest
-      with:
-        packages: binutils git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev libxml2-utils bzip2 libbz2-dev libbz2-1.0 libghc-bzlib-dev squashfs-tools pngcrush schedtool dpkg-dev liblz4-tool make optipng maven libssl-dev pwgen libswitch-perl policycoreutils minicom libxml-sax-base-perl libxml-simple-perl bc libx11-dev libgl1-mesa-dev xsltproc unzip device-tree-compiler python3 libelf-dev binutils-aarch64-linux-gnu gcc gzip
-        version: 1.0
-
-    - name: Setup Android Kernel Source Code
+    - name: Install dddk
       shell: bash
+      env:
+        DDDK_BIN_DIR: ${{ runner.temp }}/droid-ddk/bin
       run: |
-        sudo apt-get install -y repo
-        mkdir android-kernel && cd android-kernel
-        repo init -u https://android.googlesource.com/kernel/manifest -b common-${{ inputs.tag }} --repo-rev=v2.16
-        repo sync -c -j$(nproc) --no-tags
-        df -h
+        set -euo pipefail
+        mkdir -p "$DDDK_BIN_DIR" "$HOME/.droid-ddk"
+        curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+          --location --retry 3 --retry-all-errors \
+          --output "$DDDK_BIN_DIR/dddk" \
+          https://raw.githubusercontent.com/feicong/droid-ddk/main/scripts/dddk
+        chmod 0755 "$DDDK_BIN_DIR/dddk"
+        printf '%s\n' docker > "$HOME/.droid-ddk/source"
+        printf '%s\n' docker > "$HOME/.droid-ddk/mode"
+        printf '%s\n' "$DDDK_BIN_DIR" >> "$GITHUB_PATH"
+        case "$(uname -m)" in
+          x86_64|amd64) platform=linux/amd64 ;;
+          aarch64|arm64) platform=linux/arm64 ;;
+          *)
+            printf 'Unsupported runner architecture: %s\n' "$(uname -m)" >&2
+            exit 2
+            ;;
+        esac
+        printf 'DDDK_PLATFORM=%s\n' "$platform" >> "$GITHUB_ENV"
 
-    - name: Setup CCache
-      uses: actions/cache@v4
-      with:
-        path: ~/.ccache-${{ inputs.tag }}
-        key: gki-kernel-${{ inputs.tag }}-cache
-        max-size: 2G
-
-    - name: Setup Kernel Module
+    - name: Pull Droid DDK image
       shell: bash
+      env:
+        DDDK_TAG: ${{ inputs.tag }}
       run: |
-        tree -f ${{ inputs.module-name }}
+        set -euo pipefail
+        dddk pull --target "$DDDK_TAG" --platform "$DDDK_PLATFORM"
 
-        echo "[+] Kernel Module setup"
-        GKI_ROOT=$GITHUB_WORKSPACE/android-kernel
-        echo "[+] GKI_ROOT: $GKI_ROOT"
-        echo "[+] Copy driver to $GKI_ROOT/common/drivers"
-        mv ${{ inputs.module-name }} $GKI_ROOT/common/drivers/${{ inputs.module-name }}
-        
-        echo "[+] Add driver to Makefile"
-        DRIVER_MAKEFILE=$GKI_ROOT/common/drivers/Makefile
-        DRIVER_KCONFIG=$GKI_ROOT/common/drivers/Kconfig
-        grep -q "${{ inputs.module-name }}" "$DRIVER_MAKEFILE" || printf "\nobj-m += ${{ inputs.module-name }}/\n" >> "$DRIVER_MAKEFILE"
-        if [ -f $GITHUB_WORKSPACE/${{ inputs.module-name }}/Kconfig ]; then
-          grep -q "${{ inputs.module-name }}" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\\source \"drivers/${{ inputs.module-name }}/Kconfig\"" "$DRIVER_KCONFIG"
-        fi
-        # Ensure module Makefile exists
-        if [ ! -f $GKI_ROOT/common/drivers/${{ inputs.module-name }}/Makefile ]; then
-          echo "obj-m += ${{ inputs.module-name }}.o" > $GKI_ROOT/common/drivers/${{ inputs.module-name }}/Makefile
-        fi
-
-    - name: Setup for LKM
+    - name: Build kernel module
       shell: bash
-      working-directory: android-kernel
+      env:
+        DDDK_TAG: ${{ inputs.tag }}
+        MODULE_DIR: ${{ inputs.module-name }}
       run: |
-        pip install ast-grep-cli
-        sudo apt-get install llvm-15 -y
-        ast-grep -U -p '$$$ check_exports($$$) {$$$}' -r '' common/scripts/mod/modpost.c
-        ast-grep -U -p 'check_exports($$$);' -r '' common/scripts/mod/modpost.c
-        if [ -f common/android/gki_aarch64_modules ]; then
-          echo "drivers/${{ inputs.module-name }}/${{ inputs.module-name }}.ko" >> common/android/gki_aarch64_modules
-        fi
+        set -euo pipefail
+        dddk build --target "$DDDK_TAG" --platform "$DDDK_PLATFORM" \
+          --module "$MODULE_DIR"
 
-        # bazel build, android14-5.15, android14-6.1 use bazel
-        if [ ! -f build/build.sh ]; then
-          sed -i 's/needs unknown symbol/Dont abort when unknown symbol/g' build/kernel/*.sh || echo "No unknown symbol scripts found"
-          if [ -f common/modules.bzl ]; then
-            sed -i "s/_COMMON_GKI_MODULES_LIST = \[/_COMMON_GKI_MODULES_LIST = \[ \"drivers\/${{ inputs.module-name }}\/${{ inputs.module-name }}.ko\",/g" common/modules.bzl
-          fi
-        else
-          TARGET_FILE="build/kernel/build.sh"
-          if [ ! -f "$TARGET_FILE" ]; then
-            TARGET_FILE="build/build.sh"
-          fi
-          sed -i 's/needs unknown symbol/Dont abort when unknown symbol/g' $TARGET_FILE || echo "No unknown symbol in $TARGET_FILE"
-          sed -i 's/if ! diff -u "\${KERNEL_DIR}\/\${MODULES_ORDER}" "\${OUT_DIR}\/modules\.order"; then/if false; then/g' $TARGET_FILE
-          sed -i 's@\${ROOT_DIR}/build/abi/compare_to_symbol_list@echo@g' $TARGET_FILE
-          sed -i 's/needs unknown symbol/Dont abort when unknown symbol/g' build/kernel/*.sh || echo "No unknown symbol scripts found"
-        fi
-
-    - name: Make working directory clean to avoid dirty
+    - name: Prepare artifacts
       shell: bash
-      working-directory: android-kernel
+      env:
+        DDDK_TAG: ${{ inputs.tag }}
+        MODULE_DIR: ${{ inputs.module-name }}
       run: |
-        repo status
-        rm common/android/abi_gki_protected_exports_* || echo "No protected exports!"
-        git config --global user.email "bot@github.actions.org"
-        git config --global user.name "github.actions"
-        cd common/ && git add -A && git commit -a -m "Add Kernel Module"
-        repo status
-
-    - name: Build Kernel
-      shell: bash
-      working-directory: android-kernel
-      run: |
-        if [[ "${{ inputs.tag }}" == "android16-6.12" ]]; then
-          if [ "${{ inputs.arch }}" = "aarch64" ]; then
-            tools/bazel run --disk_cache=/home/runner/.cache/bazel --config=fast --lto=thin //common:kernel_aarch64_dist
-          elif [ "${{ inputs.arch }}" = "x86_64" ]; then
-            tools/bazel run --disk_cache=/home/runner/.cache/bazel --config=fast --lto=thin //common:kernel_x86_64_dist
-          fi
-        else
-          if [ "${{ inputs.arch }}" = "aarch64" ]; then
-            if [ -e build/build.sh ]; then
-              LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh CC="/usr/bin/ccache clang"
-            else
-              tools/bazel run --disk_cache=/home/runner/.cache/bazel --config=fast --lto=thin //common:kernel_aarch64_dist -- --dist_dir=dist
-            fi
-          elif [ "${{ inputs.arch }}" = "x86_64" ]; then
-            if [ -e build/build.sh ]; then
-              LTO=thin BUILD_CONFIG=common/build.config.gki.x86_64 build/build.sh CC="/usr/bin/ccache clang"
-            else
-              tools/bazel run --disk_cache=/home/runner/.cache/bazel --config=fast --lto=thin //common:kernel_x86_64_dist -- --dist_dir=dist
-            fi
-          fi
+        set -euo pipefail
+        module_file="$MODULE_DIR/$MODULE_DIR.ko"
+        if [[ ! -f "$module_file" ]]; then
+          printf 'Compiled module does not exist: %s\n' "$module_file" >&2
+          exit 5
         fi
+        rm -rf output
+        mkdir -p output
+        cp "$module_file" "output/${DDDK_TAG}_${MODULE_DIR}.ko"
 
-    - name: Prepare Artifacts
-      shell: bash
-      run: |
-        if [[ "${{ inputs.tag }}" == "android16-6.12" ]]; then
-          if [ "${{ inputs.arch }}" = "aarch64" ]; then
-            OUTDIR=android-kernel/out/kernel_aarch64/dist
-          elif [ "${{ inputs.arch }}" = "x86_64" ]; then
-            OUTDIR=android-kernel/out/kernel_x86_64/dist
-          fi
-        else
-          OUTDIR=android-kernel/out/${{ inputs.tag }}/dist
-          if [ ! -e $OUTDIR ]; then
-            OUTDIR=android-kernel/dist
-          fi
-        fi
-        mkdir output
-        ls -al $OUTDIR/
-        cp $OUTDIR/*Image* ./output/
-        cp $OUTDIR/${{ inputs.module-name }}.ko ./output/${{ inputs.tag }}_${{ inputs.module-name }}.ko
-
-    - name: Upload Kernel Artifacts
-      uses: actions/upload-artifact@v4
+    - name: Upload kernel artifacts
+      uses: actions/upload-artifact@v7
       with:
         name: Image-${{ inputs.tag }}-${{ inputs.arch }}
         path: ./output/*
+        if-no-files-found: error

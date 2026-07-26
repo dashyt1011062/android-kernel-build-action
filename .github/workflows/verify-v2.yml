@@ -1,0 +1,51 @@
+# Copyright (c) 2025-2026 fei_cong(https://github.com/feicong/feicong-course)
+
+name: Verify v2
+
+on:
+  push:
+    branches:
+      - main
+    tags-ignore:
+      - '**'
+    paths-ignore:
+      - 'LICENSE'
+      - '**.md'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  upload-module:
+    name: Upload module source
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Upload module source
+        uses: actions/upload-artifact@v7
+        with:
+          name: hello-ko
+          path: tests/fixtures/hello-ko
+          if-no-files-found: error
+
+  build-module:
+    name: Build module with dddk
+    needs: upload-module
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run action
+        uses: ./
+        with:
+          tag: android17-6.18
+          arch: aarch64
+          module-path: hello-ko
+          module-name: hello-ko
+
+      - name: Verify module
+        run: |
+          test -s output/android17-6.18_hello-ko.ko
+          file output/android17-6.18_hello-ko.ko | grep -q 'ARM aarch64'
