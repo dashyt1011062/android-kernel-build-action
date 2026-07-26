@@ -11,7 +11,7 @@
 | `module-path` | 是 | 无 | 上游上传的模块源码artifact名称 |
 | `module-name` | 是 | 无 | 模块目录名、`.c`文件名和`.ko`文件名 |
 
-支持的`tag`：`android13-5.15`、`android14-5.15`、`android14-6.1`、`android15-6.1`、`android15-6.6`、`android16-6.6`、`android16-6.12`、`android17-6.18`。
+支持的`tag`：`android13-5.15`、`android14-5.15`、`android14-6.1`、`android15-6.1`、`android15-6.6`、`android16-6.6`、`android16-6.12`、`android17-6.12`、`android17-6.18`。
 
 模块artifact解压后必须包含：
 

@@ -11,7 +11,7 @@ This action builds Android ACK ARM64 external kernel modules with `dddk`. It no 
 | `module-path` | Yes | None | Name of the module source artifact uploaded by an earlier job |
 | `module-name` | Yes | None | Module directory, `.c` file, and `.ko` file name |
 
-Supported `tag` values are `android13-5.15`, `android14-5.15`, `android14-6.1`, `android15-6.1`, `android15-6.6`, `android16-6.6`, `android16-6.12`, and `android17-6.18`.
+Supported `tag` values are `android13-5.15`, `android14-5.15`, `android14-6.1`, `android15-6.1`, `android15-6.6`, `android16-6.6`, `android16-6.12`, `android17-6.12`, and `android17-6.18`.
 
 The extracted module artifact must have this layout:
 
