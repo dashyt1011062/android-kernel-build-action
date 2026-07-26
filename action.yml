@@ -87,7 +87,7 @@ runs:
         curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
           --location --retry 3 --retry-all-errors \
           --output "$DDDK_BIN_DIR/dddk" \
-          https://raw.githubusercontent.com/feicong/droid-ddk/main/scripts/dddk
+          https://raw.githubusercontent.com/feicong/droid-ddk/719392b0e342638fea8ddbfdabec8a9f05374d42/scripts/dddk
         chmod 0755 "$DDDK_BIN_DIR/dddk"
         printf '%s\n' docker > "$HOME/.droid-ddk/source"
         printf '%s\n' docker > "$HOME/.droid-ddk/mode"
