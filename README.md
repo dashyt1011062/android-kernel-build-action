@@ -48,7 +48,7 @@ jobs:
           registry: ghcr
 ```
 
-`ghcr`映射到`ghcr.io/feicong/droid-ddk`，`dockerhub`映射到`docker.io/fsx199/droid-ddk`。GitHubActions默认使用`ghcr`，调用方可按网络环境显式选择`dockerhub`。Action在当前工作区生成`.dddk-config`，其中包含`mode=docker`和所选`source`，不会写入`$HOME/.droid-ddk/source`或`$HOME/.droid-ddk/mode`。
+`ghcr`映射到`ghcr.io/feicong/droid-ddk`，`dockerhub`映射到`docker.io/fsx199/droid-ddk`。GitHubActions默认使用`ghcr`，调用方可按网络环境显式选择`dockerhub`。Action在当前工作区生成`.dddk-config`，其中包含目标`version`、`mode=docker`和所选`source`，不会写入`$HOME/.droid-ddk/source`或`$HOME/.droid-ddk/mode`。Action不传`--platform`，由`dddk`按运行器宿主架构自动选择。
 
 产物沿用原命名：artifact为`Image-TAG-ARCH`，其中包含`TAG_MODULE_NAME.ko`。
 

@@ -96,30 +96,23 @@ runs:
       env:
         DDDK_BIN_DIR: ${{ runner.temp }}/droid-ddk/bin
         DDDK_REGISTRY: ${{ inputs.registry }}
+        DDDK_TAG: ${{ inputs.tag }}
       run: |
         set -euo pipefail
-        mkdir -p "$DDDK_BIN_DIR" "$HOME/.droid-ddk"
+        mkdir -p "$DDDK_BIN_DIR"
         curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
           --location --retry 3 --retry-all-errors \
           --output "$DDDK_BIN_DIR/dddk" \
-          https://raw.githubusercontent.com/feicong/droid-ddk/f0b448f8b78271ac5537b4fd0e87a22a2aaa2cbf/scripts/dddk
+          https://raw.githubusercontent.com/feicong/droid-ddk/27fe0677f816b09d1cc680cd33634262ad572fd1/scripts/dddk
         chmod 0755 "$DDDK_BIN_DIR/dddk"
         case "$DDDK_REGISTRY" in
           ghcr) dddk_source=github ;;
           dockerhub) dddk_source=docker ;;
         esac
-        printf 'mode=docker\nsource=%s\n' "$dddk_source" > .dddk-config
+        printf 'version=%s\nmode=docker\nsource=%s\n' \
+          "$DDDK_TAG" "$dddk_source" > .dddk-config
         chmod 0600 .dddk-config
         printf '%s\n' "$DDDK_BIN_DIR" >> "$GITHUB_PATH"
-        case "$(uname -m)" in
-          x86_64|amd64) platform=linux/amd64 ;;
-          aarch64|arm64) platform=linux/arm64 ;;
-          *)
-            printf 'Unsupported runner architecture: %s\n' "$(uname -m)" >&2
-            exit 2
-            ;;
-        esac
-        printf 'DDDK_PLATFORM=%s\n' "$platform" >> "$GITHUB_ENV"
 
     - name: Pull Droid DDK image
       shell: bash
@@ -127,7 +120,7 @@ runs:
         DDDK_TAG: ${{ inputs.tag }}
       run: |
         set -euo pipefail
-        dddk pull --target "$DDDK_TAG" --platform "$DDDK_PLATFORM"
+        dddk pull --target "$DDDK_TAG"
 
     - name: Build kernel module
       shell: bash
@@ -136,8 +129,7 @@ runs:
         MODULE_DIR: ${{ inputs.module-name }}
       run: |
         set -euo pipefail
-        dddk build --target "$DDDK_TAG" --platform "$DDDK_PLATFORM" \
-          --module "$MODULE_DIR"
+        dddk build --target "$DDDK_TAG" --module "$MODULE_DIR"
 
     - name: Prepare artifacts
       shell: bash
