@@ -10,6 +10,7 @@ This action builds Android ACK ARM64 external kernel modules with `dddk`. It no 
 | `arch` | Yes | `aarch64` | Preserved v1 input; accepts `aarch64` or `arm64` |
 | `module-path` | Yes | None | Name of the module source artifact uploaded by an earlier job |
 | `module-name` | Yes | None | Module directory, `.c` file, and `.ko` file name |
+| `registry` | No | `ghcr` | Droid DDK image registry; accepts `ghcr` or `dockerhub` |
 
 Supported `tag` values are `android13-5.15`, `android14-5.15`, `android14-6.1`, `android15-6.1`, `android15-6.6`, `android16-6.6`, `android16-6.12`, `android17-6.12`, and `android17-6.18`.
 
@@ -44,7 +45,10 @@ jobs:
           arch: aarch64
           module-path: hello-ko
           module-name: hello-ko
+          registry: ghcr
 ```
+
+`ghcr` maps to `ghcr.io/feicong/droid-ddk`, while `dockerhub` maps to `docker.io/fsx199/droid-ddk`. GitHub Actions uses `ghcr` by default; callers can select `dockerhub` for their network environment.
 
 The original artifact naming is preserved: `Image-TAG-ARCH` contains `TAG_MODULE_NAME.ko`.
 

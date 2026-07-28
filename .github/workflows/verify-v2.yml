@@ -44,6 +44,7 @@ jobs:
           arch: aarch64
           module-path: hello-ko
           module-name: hello-ko
+          registry: ghcr
 
       - name: Verify module
         run: |

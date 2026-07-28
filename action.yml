@@ -22,6 +22,10 @@ inputs:
   module-name:
     description: 'Specify the kernel module directory and output name.'
     required: true
+  registry:
+    description: 'Select the Droid DDK image registry (ghcr or dockerhub).'
+    default: 'ghcr'
+    required: false
 
 runs:
   using: 'composite'
@@ -38,6 +42,7 @@ runs:
         DDDK_TAG: ${{ inputs.tag }}
         DDDK_ARCH: ${{ inputs.arch }}
         MODULE_DIR: ${{ inputs.module-name }}
+        DDDK_REGISTRY: ${{ inputs.registry }}
       run: |
         set -euo pipefail
         valid_tags=(
@@ -64,6 +69,14 @@ runs:
             exit 1
             ;;
         esac
+        case "$DDDK_REGISTRY" in
+          ghcr|dockerhub) ;;
+          *)
+            printf 'Invalid registry: %s. Supported registries: ghcr, dockerhub.\n' \
+              "$DDDK_REGISTRY" >&2
+            exit 1
+            ;;
+        esac
         if [[ ! -d "$MODULE_DIR" ]]; then
           printf 'Module directory does not exist: %s\n' "$MODULE_DIR" >&2
           exit 2
@@ -82,6 +95,7 @@ runs:
       shell: bash
       env:
         DDDK_BIN_DIR: ${{ runner.temp }}/droid-ddk/bin
+        DDDK_REGISTRY: ${{ inputs.registry }}
       run: |
         set -euo pipefail
         mkdir -p "$DDDK_BIN_DIR" "$HOME/.droid-ddk"
@@ -90,7 +104,11 @@ runs:
           --output "$DDDK_BIN_DIR/dddk" \
           https://raw.githubusercontent.com/feicong/droid-ddk/bc7e1b74140a6f7c63ee2b237fe7301123769056/scripts/dddk
         chmod 0755 "$DDDK_BIN_DIR/dddk"
-        printf '%s\n' docker > "$HOME/.droid-ddk/source"
+        case "$DDDK_REGISTRY" in
+          ghcr) dddk_source=github ;;
+          dockerhub) dddk_source=docker ;;
+        esac
+        printf '%s\n' "$dddk_source" > "$HOME/.droid-ddk/source"
         printf '%s\n' docker > "$HOME/.droid-ddk/mode"
         printf '%s\n' "$DDDK_BIN_DIR" >> "$GITHUB_PATH"
         case "$(uname -m)" in

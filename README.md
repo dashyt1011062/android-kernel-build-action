@@ -10,6 +10,7 @@
 | `arch` | 是 | `aarch64` | 保留原参数，接受`aarch64`或`arm64` |
 | `module-path` | 是 | 无 | 上游上传的模块源码artifact名称 |
 | `module-name` | 是 | 无 | 模块目录名、`.c`文件名和`.ko`文件名 |
+| `registry` | 否 | `ghcr` | `droid-ddk`镜像仓，接受`ghcr`或`dockerhub` |
 
 支持的`tag`：`android13-5.15`、`android14-5.15`、`android14-6.1`、`android15-6.1`、`android15-6.6`、`android16-6.6`、`android16-6.12`、`android17-6.12`、`android17-6.18`。
 
@@ -44,7 +45,10 @@ jobs:
           arch: aarch64
           module-path: hello-ko
           module-name: hello-ko
+          registry: ghcr
 ```
+
+`ghcr`映射到`ghcr.io/feicong/droid-ddk`，`dockerhub`映射到`docker.io/fsx199/droid-ddk`。GitHubActions默认使用`ghcr`，调用方可按网络环境显式选择`dockerhub`。
 
 产物沿用原命名：artifact为`Image-TAG-ARCH`，其中包含`TAG_MODULE_NAME.ko`。
 
