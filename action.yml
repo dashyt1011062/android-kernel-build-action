@@ -102,14 +102,14 @@ runs:
         curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
           --location --retry 3 --retry-all-errors \
           --output "$DDDK_BIN_DIR/dddk" \
-          https://raw.githubusercontent.com/feicong/droid-ddk/bc7e1b74140a6f7c63ee2b237fe7301123769056/scripts/dddk
+          https://raw.githubusercontent.com/feicong/droid-ddk/f0b448f8b78271ac5537b4fd0e87a22a2aaa2cbf/scripts/dddk
         chmod 0755 "$DDDK_BIN_DIR/dddk"
         case "$DDDK_REGISTRY" in
           ghcr) dddk_source=github ;;
           dockerhub) dddk_source=docker ;;
         esac
-        printf '%s\n' "$dddk_source" > "$HOME/.droid-ddk/source"
-        printf '%s\n' docker > "$HOME/.droid-ddk/mode"
+        printf 'mode=docker\nsource=%s\n' "$dddk_source" > .dddk-config
+        chmod 0600 .dddk-config
         printf '%s\n' "$DDDK_BIN_DIR" >> "$GITHUB_PATH"
         case "$(uname -m)" in
           x86_64|amd64) platform=linux/amd64 ;;

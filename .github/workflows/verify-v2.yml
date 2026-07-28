@@ -50,3 +50,6 @@ jobs:
         run: |
           test -s output/android17-6.18_hello-ko.ko
           file output/android17-6.18_hello-ko.ko | grep -q 'ARM aarch64'
+          test "$(cat .dddk-config)" = $'mode=docker\nsource=github'
+          test ! -e "$HOME/.droid-ddk/source"
+          test ! -e "$HOME/.droid-ddk/mode"

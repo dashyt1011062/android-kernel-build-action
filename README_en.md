@@ -48,7 +48,7 @@ jobs:
           registry: ghcr
 ```
 
-`ghcr` maps to `ghcr.io/feicong/droid-ddk`, while `dockerhub` maps to `docker.io/fsx199/droid-ddk`. GitHub Actions uses `ghcr` by default; callers can select `dockerhub` for their network environment.
+`ghcr` maps to `ghcr.io/feicong/droid-ddk`, while `dockerhub` maps to `docker.io/fsx199/droid-ddk`. GitHub Actions uses `ghcr` by default; callers can select `dockerhub` for their network environment. The action writes `mode=docker` and the selected `source` to `.dddk-config` in the current workspace; it does not write `$HOME/.droid-ddk/source` or `$HOME/.droid-ddk/mode`.
 
 The original artifact naming is preserved: `Image-TAG-ARCH` contains `TAG_MODULE_NAME.ko`.
 
