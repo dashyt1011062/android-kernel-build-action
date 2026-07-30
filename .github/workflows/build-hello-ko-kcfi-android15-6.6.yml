@@ -100,6 +100,7 @@ jobs:
                 STRIP=/clang-r510928/bin/llvm-strip \
                 HOSTCC=/clang-r510928/bin/clang \
                 HOSTCXX=/clang-r510928/bin/clang++ \
+                KCFLAGS=-Wno-error=unused-command-line-argument \
                 modules'
           mkdir -p output
           cp "$module_dir/hello-ko-kcfi.ko" output/android15-6.6_hello-ko-kcfi-r510928.ko
