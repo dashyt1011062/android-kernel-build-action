@@ -1,0 +1,93 @@
+name: Build hello-ko-kcfi android15-6.6
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build-hello-ko-kcfi-android15-6.6.yml'
+      - 'tests/fixtures/hello-ko-kcfi/**'
+
+jobs:
+  upload-module:
+    name: Upload hello-ko-kcfi source
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Upload module source
+        uses: actions/upload-artifact@v7
+        with:
+          name: hello-ko-kcfi
+          path: tests/fixtures/hello-ko-kcfi
+          if-no-files-found: error
+
+  build-module:
+    name: Build hello-ko-kcfi for android15-6.6
+    needs: upload-module
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192
+          temp-reserve-mb: 2048
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Move Docker data root to build volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker_root="$GITHUB_WORKSPACE/.docker"
+          sudo systemctl stop docker
+          sudo mkdir -p "$docker_root"
+          printf '{"data-root":"%s"}\n' "$docker_root" | sudo tee /etc/docker/daemon.json
+          sudo systemctl start docker
+          docker info
+          df -h / "$GITHUB_WORKSPACE" "$docker_root"
+
+      - name: Run local build action
+        uses: ./
+        with:
+          tag: android15-6.6
+          arch: aarch64
+          module-path: hello-ko-kcfi
+          module-name: hello-ko-kcfi
+          registry: ghcr
+
+      - name: Static KCFI inspection
+        shell: bash
+        run: |
+          set -euo pipefail
+          module=output/android15-6.6_hello-ko-kcfi.ko
+          mkdir -p static-inspection
+          test -s "$module"
+          file "$module" | tee static-inspection/file.txt
+          readelf -p .comment "$module" | tee static-inspection/comment.txt
+          readelf -s "$module" | tee static-inspection/symbols.txt
+          readelf -x .init.text "$module" | tee static-inspection/init_text_hex.txt
+          init_value="$(awk '$8 == "init_module" {print $2}' static-inspection/symbols.txt | head -n1)"
+          printf 'init_module value: %s\n' "$init_value" | tee static-inspection/kcfi-check.txt
+          if [[ "$init_value" != "0000000000000004" ]]; then
+            printf 'Expected init_module at offset 0x4 so a KCFI type word can live at function-4.\n' >&2
+            exit 10
+          fi
+          if ! grep -qi 'a6c5b136' static-inspection/init_text_hex.txt; then
+            printf 'Expected .init.text to contain little-endian KCFI type word 0x36b1c5a6.\n' >&2
+            exit 11
+          fi
+
+      - name: Upload static inspection
+        uses: actions/upload-artifact@v7
+        with:
+          name: Static-check-android15-6.6-hello-ko-kcfi
+          path: static-inspection/*
+          if-no-files-found: error
