@@ -10,23 +10,8 @@ on:
       - 'tests/fixtures/hello-ko-kcfi/**'
 
 jobs:
-  upload-module:
-    name: Upload hello-ko-kcfi source
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Upload module source
-        uses: actions/upload-artifact@v7
-        with:
-          name: hello-ko-kcfi
-          path: tests/fixtures/hello-ko-kcfi
-          if-no-files-found: error
-
   build-module:
-    name: Build hello-ko-kcfi for android15-6.6
-    needs: upload-module
+    name: Build hello-ko-kcfi for android15-6.6 with r510928
     runs-on: ubuntu-24.04
     steps:
       - name: Maximize build space
@@ -54,20 +39,76 @@ jobs:
           docker info
           df -h / "$GITHUB_WORKSPACE" "$docker_root"
 
-      - name: Run local build action
-        uses: ./
-        with:
-          tag: android15-6.6
-          arch: aarch64
-          module-path: hello-ko-kcfi
-          module-name: hello-ko-kcfi
-          registry: ghcr
+      - name: Install dddk
+        shell: bash
+        run: |
+          set -euo pipefail
+          dddk_bin_dir="$RUNNER_TEMP/droid-ddk/bin"
+          mkdir -p "$dddk_bin_dir"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --location --retry 3 --retry-all-errors \
+            --output "$dddk_bin_dir/dddk" \
+            https://raw.githubusercontent.com/feicong/droid-ddk/27fe0677f816b09d1cc680cd33634262ad572fd1/scripts/dddk
+          chmod 0755 "$dddk_bin_dir/dddk"
+          printf 'version=android15-6.6\nmode=docker\nsource=github\n' > .dddk-config
+          chmod 0600 .dddk-config
+          printf '%s\n' "$dddk_bin_dir" >> "$GITHUB_PATH"
+
+      - name: Pull Droid DDK image
+        shell: bash
+        run: |
+          set -euo pipefail
+          dddk pull --target android15-6.6
+
+      - name: Download Android clang r510928
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang_dir="$GITHUB_WORKSPACE/toolchains/clang-r510928"
+          mkdir -p "$clang_dir"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --location --retry 3 --retry-all-errors \
+            --output "$RUNNER_TEMP/clang-r510928.tar.gz" \
+            https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main-kernel-build-2024/clang-r510928.tar.gz
+          tar -xzf "$RUNNER_TEMP/clang-r510928.tar.gz" -C "$clang_dir"
+          "$clang_dir/bin/clang" --version
+
+      - name: Build with Android clang r510928
+        shell: bash
+        run: |
+          set -euo pipefail
+          module_dir="$GITHUB_WORKSPACE/tests/fixtures/hello-ko-kcfi"
+          clang_dir="$GITHUB_WORKSPACE/toolchains/clang-r510928"
+          docker run --platform linux/amd64 --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "$module_dir":/build \
+            -v "$clang_dir":/clang-r510928:ro \
+            -w /build \
+            ghcr.io/feicong/droid-ddk:android15-6.6 \
+            sh -c 'set -eux; \
+              /clang-r510928/bin/clang --version; \
+              PATH=/clang-r510928/bin:$PATH \
+              make -C /kernel/src O=/kernel/out M=/build \
+                ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- \
+                CLANG_TRIPLE=aarch64-linux-gnu- \
+                CC=/clang-r510928/bin/clang \
+                LD=/clang-r510928/bin/ld.lld \
+                AR=/clang-r510928/bin/llvm-ar \
+                NM=/clang-r510928/bin/llvm-nm \
+                OBJCOPY=/clang-r510928/bin/llvm-objcopy \
+                OBJDUMP=/clang-r510928/bin/llvm-objdump \
+                STRIP=/clang-r510928/bin/llvm-strip \
+                HOSTCC=/clang-r510928/bin/clang \
+                HOSTCXX=/clang-r510928/bin/clang++ \
+                modules'
+          mkdir -p output
+          cp "$module_dir/hello-ko-kcfi.ko" output/android15-6.6_hello-ko-kcfi-r510928.ko
 
       - name: Static KCFI inspection
         shell: bash
         run: |
           set -euo pipefail
-          module=output/android15-6.6_hello-ko-kcfi.ko
+          module=output/android15-6.6_hello-ko-kcfi-r510928.ko
           mkdir -p static-inspection
           test -s "$module"
           file "$module" | tee static-inspection/file.txt
@@ -85,9 +126,16 @@ jobs:
             exit 11
           fi
 
+      - name: Upload kernel artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Image-android15-6.6-aarch64-r510928
+          path: output/*
+          if-no-files-found: error
+
       - name: Upload static inspection
         uses: actions/upload-artifact@v7
         with:
-          name: Static-check-android15-6.6-hello-ko-kcfi
+          name: Static-check-android15-6.6-hello-ko-kcfi-r510928
           path: static-inspection/*
           if-no-files-found: error
