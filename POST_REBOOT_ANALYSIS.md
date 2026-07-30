@@ -64,3 +64,29 @@ The generated `hello_ko` has `init_module` at offset `0x0` and no matching CFI t
 The current `feicong/android-kernel-build-action` stock `android15-6.6` target can produce a `.ko`, but this artifact is not safe to load on this device. It is built against a different ACK kernel/toolchain and lacks the CFI entry layout expected by this kernel.
 
 The next build attempt should use this device's kernel config and a matching Android clang 18/r510928 toolchain, with `CONFIG_CFI_CLANG` module CFI enabled so `init_module` has the expected type word at `function - 4`.
+
+## Follow-up: r510928 KCFI static test
+
+Workflow run:
+
+- `https://github.com/dashyt1011062/android-kernel-build-action/actions/runs/30538852920`
+- status: success
+
+Local artifact:
+
+- `artifacts/run-30538852920/Image-android15-6.6-aarch64-r510928/android15-6.6_hello-ko-kcfi-r510928.ko`
+
+Static result:
+
+- compiler comment: `Android (11368308, +pgo, +bolt, +lto, +mlgo, based on r510928) clang version 18.0.0`
+- `init_module` symbol value: `0x4`
+- `.init.text+0x0`: `0x36b1c5a6`
+
+This fixes the direct CFI entry layout problem seen in the panic. The generated module now matches the vendor module pattern where the KCFI type word lives at `function - 4`.
+
+Remaining mismatch:
+
+- artifact `vermagic`: `6.6.142-4k-g72d9552a905a-dirty SMP preempt mod_unload modversions aarch64`
+- device kernel: `6.6.66-android15-8-g29d86c5fc9dd-abogki428889875-4k`
+
+So this artifact is useful proof that the KCFI panic can be avoided with the right compiler flags, but it still should not be loaded as a real device module without an exact device kernel build directory or equivalent exact `Module.symvers`/config/localversion inputs.
