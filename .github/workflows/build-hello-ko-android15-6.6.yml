@@ -1,0 +1,61 @@
+name: Build hello-ko android15-6.6
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build-hello-ko-android15-6.6.yml'
+      - 'tests/fixtures/hello-ko/**'
+
+jobs:
+  upload-module:
+    name: Upload hello-ko source
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Upload module source
+        uses: actions/upload-artifact@v7
+        with:
+          name: hello-ko
+          path: tests/fixtures/hello-ko
+          if-no-files-found: error
+
+  build-module:
+    name: Build hello-ko for android15-6.6
+    needs: upload-module
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192
+          temp-reserve-mb: 2048
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run local build action
+        uses: ./
+        with:
+          tag: android15-6.6
+          arch: aarch64
+          module-path: hello-ko
+          module-name: hello-ko
+          registry: ghcr
+
+      - name: Verify module
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s output/android15-6.6_hello-ko.ko
+          file output/android15-6.6_hello-ko.ko | grep -q 'ARM aarch64'
+          printf 'Built artifact:\n'
+          file output/android15-6.6_hello-ko.ko
